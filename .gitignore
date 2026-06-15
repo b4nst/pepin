@@ -1,0 +1,21 @@
+# Devenv
+.devenv*
+devenv.local.nix
+devenv.local.yaml
+
+# direnv
+.direnv
+
+# pre-commit
+.pre-commit-config.yaml
+
+# Claude Code (generated from devenv.nix - regenerated on `devenv shell`)
+.claude/settings.json
+.claude/agents/
+.claude/commands/
+.claude/settings.local.json
+
+# Zig
+.zig-cache/
+zig-out/
+zig-pkg/
