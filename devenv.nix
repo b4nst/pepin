@@ -6,6 +6,17 @@
   ...
 }:
 
+let
+  # Limine's nixpkgs package is darwin-unsupported (it builds the EFI binaries
+  # from source). We don't need to build them: the binary branch ships prebuilt,
+  # host-independent BOOT*.EFI for every target arch. Pinned to a release tag.
+  limine-bin = pkgs.fetchFromGitHub {
+    owner = "limine-bootloader";
+    repo = "limine";
+    rev = "v11.4.1-binary";
+    hash = "sha256-lBPx5B3yiuWC+CiaygsOwCWKTEnLU2Wv/DE+msGXM6w=";
+  };
+in
 {
   # https://devenv.sh/basics/
   env.GREET = "pepin's devenv";
@@ -14,7 +25,18 @@
   packages = [
     pkgs.git
     pkgs.jq # used by the Claude Code guardrail hook below
+    pkgs.qemu
+    pkgs.mtools # build the FAT ESP image without mounting (macOS-safe)
   ];
+
+  # Paths exposed to build.zig (read with std.process.getEnvVarOwned).
+  # LIMINE_DIR holds the per-target BOOT*.EFI; build.zig picks the right one.
+  # Firmware comes from QEMU's own bundle (pkgs.OVMF is unsupported on darwin),
+  # which conveniently ships every arch, so cross-arch boot is covered.
+  env.LIMINE_DIR = "${limine-bin}";
+  env.OVMF_CODE = "${pkgs.qemu}/share/qemu/edk2-x86_64-code.fd";
+  env.OVMF_VARS = "${pkgs.qemu}/share/qemu/edk2-i386-vars.fd"; # vars store is shared, named i386
+  env.AAVMF_CODE = "${pkgs.qemu}/share/qemu/edk2-aarch64-code.fd";
 
   # https://devenv.sh/languages/
   languages.zig.enable = true;

@@ -18,6 +18,18 @@ const Arch = enum {
     }
 };
 
+/// Shell script to make an image
+const mkimg_script =
+    \\set -eu
+    \\img=$1; efi=$2; conf=$3; kernel=$4
+    \\mformat -i "$img" -C -T 131072 ::
+    \\mmd     -i "$img" ::/EFI ::/EFI/BOOT
+    \\mcopy   -i "$img" "$efi"    "::/EFI/BOOT/$(basename "$efi")"
+    \\mcopy   -i "$img" "$conf"   ::/limine.conf
+    \\mmd     -i "$img" ::/boot
+    \\mcopy   -i "$img" "$kernel" ::/boot/kernel
+;
+
 /// Create a target query for the given architecture.
 /// The target needs to disable some features that are not supported
 /// in a bare-metal environment, such as SSE or AVX on x86_64.
@@ -64,12 +76,16 @@ pub fn build(b: *std.Build) void {
     const target = b.resolveTargetQuery(query);
     const optimize = b.standardOptimizeOption(.{});
 
+    // Create our limine wrapper module
+    const limine_module = b.createModule(.{ .root_source_file = b.path("src/limine.zig"), .target = target });
+
     // Create a module for the kernel.
     const kernel_module = b.createModule(.{
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
         .sanitize_c = .off,
+        .pic = false,
     });
 
     // Specify the code model and other target-specific options.
@@ -81,8 +97,6 @@ pub fn build(b: *std.Build) void {
         .aarch64, .riscv64, .loongarch64 => {},
     }
 
-    const limine_module = b.createModule(.{ .root_source_file = b.path("src/limine.zig"), .target = b.graph.host });
-
     // Add the limine module as an import to the kernel module.
     kernel_module.addImport("limine", limine_module);
 
@@ -90,13 +104,74 @@ pub fn build(b: *std.Build) void {
     const kernel = b.addExecutable(.{
         .name = "kernel",
         .root_module = kernel_module,
+        .linkage = .static,
     });
 
     // Set the linker script for the kernel based on the architecture.
     kernel.setLinkerScript(b.path(b.fmt("linker-{s}.lds", .{@tagName(arch)})));
+    // remove unused sections
+    kernel.link_function_sections = true;
+    kernel.link_data_sections = true;
+    kernel.link_gc_sections = true;
+    kernel.entry = .{ .symbol_name = "kmain" };
+    kernel.image_base = 0xffffffff80000000; // match our linker scripts to be in higher half
 
-    // I am not sure whether it is the best way to override exe_dir, but it seems
-    // to work just fine - if you have a better idea, please let me know!
-    b.resolveInstallPrefix(null, .{ .exe_dir = b.fmt("bin-{s}", .{@tagName(arch)}) });
-    b.installArtifact(kernel);
+    // Add kernel install step
+    const kinstall = b.addInstallArtifact(kernel, .{ .dest_dir = .{ .override = .{ .custom = b.fmt("bin-{s}", .{@tagName(arch)}) } } });
+    b.getInstallStep().dependOn(&kinstall.step);
+
+    // Make image
+    const limine_dir = b.graph.environ_map.get("LIMINE_DIR") orelse std.debug.panic("LIMINE_DIR not set - please run inside devenv shell", .{});
+    const efi_file = switch (arch) {
+        .aarch64 => b.pathJoin(&.{ limine_dir, "BOOTAA64.EFI" }),
+        .loongarch64 => b.pathJoin(&.{ limine_dir, "BOOTLOONGARCH64.EFI" }),
+        .riscv64 => b.pathJoin(&.{ limine_dir, "BOOTRISCV64.EFI" }),
+        .x86_64 => b.pathJoin(&.{ limine_dir, "BOOTX64.EFI" }),
+    };
+    const img_cmd = b.addSystemCommand(&.{ "sh", "-c", mkimg_script, "sh" });
+    const image = img_cmd.addOutputFileArg("os.img");
+    img_cmd.addFileArg(.{ .cwd_relative = efi_file });
+    img_cmd.addFileArg(b.path("limine.conf"));
+    img_cmd.addFileArg(kernel.getEmittedBin());
+
+    // Add a build step to export the image
+    const install_img = b.addInstallFile(image, b.fmt("os-{s}.img", .{@tagName(arch)}));
+    const image_step = b.step("image", "Build the bootable disk image");
+    image_step.dependOn(&install_img.step);
+
+    // Launch QEMU
+    const qemu = b.addSystemCommand(&.{getQEMUBin(arch)});
+    switch (arch) {
+        .x86_64 => {
+            qemu.addArgs(&.{
+                "-M",
+                "q35",
+                "-m",
+                "256M",
+            });
+            const ovmf_code = b.graph.environ_map.get("OVMF_CODE") orelse std.debug.panic("OVMF_CODE not set - please run inside devenv shell", .{});
+            qemu.addArg("-drive");
+            qemu.addArg(b.fmt("if=pflash,format=raw,unit=0,readonly=on,file={s}", .{ovmf_code}));
+            const ovmf_vars = b.graph.environ_map.get("OVMF_VARS") orelse std.debug.panic("OVMF_VARS not set - please run inside devenv shell", .{});
+            qemu.addArg("-drive");
+            qemu.addArg(b.fmt("if=pflash,format=raw,unit=1,readonly=on,file={s}", .{ovmf_vars}));
+        },
+        else => std.debug.panic("Unsupported qemu arch", .{}),
+    }
+    qemu.addArg("-drive");
+    qemu.addPrefixedFileArg("format=raw,file=", image);
+    qemu.addArgs(&.{ "-serial", "stdio", "-display", "none" });
+
+    qemu.has_side_effects = true;
+    qemu.stdio = .inherit;
+
+    const run_step = b.step("run", "Boot the kernel in QEMU");
+    run_step.dependOn(&qemu.step);
+}
+
+fn getQEMUBin(arch: Arch) []const u8 {
+    return switch (arch) {
+        .x86_64 => "qemu-system-x86_64",
+        else => std.debug.panic("Unsupported QEMU arch", .{}),
+    };
 }
