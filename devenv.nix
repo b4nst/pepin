@@ -37,6 +37,8 @@ in
   env.OVMF_CODE = "${pkgs.qemu}/share/qemu/edk2-x86_64-code.fd";
   env.OVMF_VARS = "${pkgs.qemu}/share/qemu/edk2-i386-vars.fd"; # vars store is shared, named i386
   env.AAVMF_CODE = "${pkgs.qemu}/share/qemu/edk2-aarch64-code.fd";
+  env.RISCV_CODE = "${pkgs.qemu}/share/qemu/edk2-riscv-code.fd";
+  env.RISCV_VARS = "${pkgs.qemu}/share/qemu/edk2-riscv-vars.fd"; # riscv ships its own vars, unlike aarch64
 
   # https://devenv.sh/languages/
   languages.zig.enable = true;

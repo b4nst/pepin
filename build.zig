@@ -142,25 +142,55 @@ pub fn build(b: *std.Build) void {
     // Launch QEMU
     const qemu = b.addSystemCommand(&.{getQEMUBin(arch)});
     switch (arch) {
+        .aarch64 => {
+            qemu.addArgs(&.{
+                "-M",
+                "virt",
+                "-cpu",
+                "cortex-a72",
+            });
+            const aavmf_code = b.graph.environ_map.get("AAVMF_CODE") orelse std.debug.panic("AAVMF_CODE not set - please run inside devenv shell", .{});
+            qemu.addArg("-drive");
+            qemu.addArg(b.fmt("if=pflash,format=raw,unit=0,readonly=on,file={s}", .{aavmf_code}));
+            // create 64M empty var store
+            const aa64_vars = b.addSystemCommand(&.{ "truncate", "-s", "64M" }).addOutputFileArg("aa64-vars.fd");
+            qemu.addArg("-drive");
+            // varstore needs to be writable on aarch64 platform, but the generated
+            // blank disk will not. use snapshot instead to redirect writes to void.
+            // we don't need to persist UEFI vars anyway, fake NVRAM is fine (bootloader automatically falls back to our limine)
+            qemu.addPrefixedFileArg("if=pflash,format=raw,unit=1,snapshot=on,file=", aa64_vars);
+        },
+        .riscv64 => {
+            qemu.addArgs(&.{
+                "-M",
+                "virt",
+            });
+            const riscv_code = b.graph.environ_map.get("RISCV_CODE") orelse std.debug.panic("RISCV_CODE not set - please run inside devenv shell", .{});
+            qemu.addArg("-drive");
+            qemu.addArg(b.fmt("if=pflash,format=raw,unit=0,readonly=on,file={s}", .{riscv_code}));
+            const riscv_vars = b.graph.environ_map.get("RISCV_VARS") orelse std.debug.panic("RISCV_VARS not set - please run inside devenv shell", .{});
+            qemu.addArg("-drive");
+            qemu.addArg(b.fmt("if=pflash,format=raw,unit=1,snapshot=on,file={s}", .{riscv_vars}));
+        },
         .x86_64 => {
             qemu.addArgs(&.{
                 "-M",
                 "q35",
-                "-m",
-                "256M",
             });
             const ovmf_code = b.graph.environ_map.get("OVMF_CODE") orelse std.debug.panic("OVMF_CODE not set - please run inside devenv shell", .{});
             qemu.addArg("-drive");
             qemu.addArg(b.fmt("if=pflash,format=raw,unit=0,readonly=on,file={s}", .{ovmf_code}));
             const ovmf_vars = b.graph.environ_map.get("OVMF_VARS") orelse std.debug.panic("OVMF_VARS not set - please run inside devenv shell", .{});
             qemu.addArg("-drive");
-            qemu.addArg(b.fmt("if=pflash,format=raw,unit=1,readonly=on,file={s}", .{ovmf_vars}));
+            qemu.addArg(b.fmt("if=pflash,format=raw,unit=1,snapshot=on,file={s}", .{ovmf_vars}));
         },
         else => std.debug.panic("Unsupported qemu arch", .{}),
     }
+    // Add our os image as a drive
     qemu.addArg("-drive");
-    qemu.addPrefixedFileArg("format=raw,file=", image);
-    qemu.addArgs(&.{ "-serial", "stdio", "-display", "none" });
+    qemu.addPrefixedFileArg("format=raw,if=virtio,file=", image);
+    // redirect serial to our stdio, and run headless
+    qemu.addArgs(&.{ "-m", "256M", "-serial", "stdio", "-display", "none" });
 
     qemu.has_side_effects = true;
     qemu.stdio = .inherit;
@@ -171,6 +201,8 @@ pub fn build(b: *std.Build) void {
 
 fn getQEMUBin(arch: Arch) []const u8 {
     return switch (arch) {
+        .aarch64 => "qemu-system-aarch64",
+        .riscv64 => "qemu-system-riscv64",
         .x86_64 => "qemu-system-x86_64",
         else => std.debug.panic("Unsupported QEMU arch", .{}),
     };
