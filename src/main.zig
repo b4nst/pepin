@@ -1,6 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const limine = @import("limine");
+const serial = @import("serial.zig");
 
 pub const panic = std.debug.FullPanic(caravanPalace);
 
@@ -37,5 +38,6 @@ export fn kmain() noreturn {
         @panic("Unsupported limine base revision");
     }
 
+    serial.write("hello from pepin\r\n");
     hcf();
 }
