@@ -105,6 +105,7 @@ pub fn build(b: *std.Build) void {
         .name = "kernel",
         .root_module = kernel_module,
         .linkage = .static,
+        .use_llvm = true, // Zig's self-hosted ELF linker is causing us troubles
     });
 
     // Set the linker script for the kernel based on the architecture.

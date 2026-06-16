@@ -12,6 +12,8 @@ fn caravanPalace(_: []const u8, _: ?usize) noreturn {
 
 // Export markers
 export var base_rev: limine.BaseRevision linksection(".limine_requests") = .{ .revision = 6 };
+export var hhdm_request: limine.HhdmRequest linksection(".limine_requests") = .{};
+export var mm_request: limine.MemoryMapRequest linksection(".limine_requests") = .{};
 // export var framebuffer_request: limine.FramebufferRequest linksection(".limine_requests") = .{};
 
 // This can be anywhere but needs to be somewhere.
@@ -36,6 +38,23 @@ export fn kmain() noreturn {
     // Ensure the bootloader actually understands our base revision (see spec).
     if (!base_rev.isSupported()) {
         @panic("Unsupported limine base revision");
+    }
+
+    // wipe bootloader menu
+    serial.write("\x1b[2J\x1b[H");
+
+    if (hhdm_request.response) |response| {
+        serial.print("hhdm offset: {x}\n", .{response.offset});
+    }
+
+    if (mm_request.response) |response| {
+        for (response.getEntries()) |entry| {
+            serial.print("base: {x}, length: {x}, type:{s}\n", .{
+                entry.base,
+                entry.length,
+                @tagName(entry.type),
+            });
+        }
     }
 
     serial.write("hello from pepin\r\n");
