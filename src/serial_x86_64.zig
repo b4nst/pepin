@@ -1,3 +1,5 @@
+pub fn init() void {}
+
 pub fn putchar(c: u8) void {
     const com1 = 0x3f8;
     const lsr = com1 + 5;

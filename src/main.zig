@@ -2,7 +2,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 const limine = @import("limine");
 
-const pmm = @import("pmm.zig");
+const mem = @import("mem/main.zig");
 const serial = @import("serial.zig");
 
 pub const panic = std.debug.FullPanic(caravanPalace);
@@ -35,6 +35,21 @@ fn hcf() noreturn {
     }
 }
 
+fn init() void {
+    const mm_response = mm_request.response orelse @panic("failed to get memory map from limine");
+    const hhdm_response = hhdm_request.response orelse @panic("failed to get HHDM response from limine");
+
+    // memory first
+    const blocks = mem.init(mm_response, hhdm_response);
+    // then serial
+    serial.init();
+
+    // wipe bootloader menu
+    serial.write("\x1b[2J\x1b[H");
+
+    serial.print("initialized {d} blocks\n", .{blocks});
+}
+
 // Export to avoid linkage name-mangling
 export fn kmain() noreturn {
     // Ensure the bootloader actually understands our base revision (see spec).
@@ -42,16 +57,7 @@ export fn kmain() noreturn {
         @panic("unsupported limine base revision");
     }
 
-    const mm_response = mm_request.response orelse @panic("failed to get memory map from limine");
-    const hhdm_response = hhdm_request.response orelse @panic("failed to get HHDM response from limine");
-
-    // Init memory manager
-    const blocks = pmm.init(mm_response, hhdm_response);
-
-    // wipe bootloader menu
-    serial.write("\x1b[2J\x1b[H");
-
-    serial.print("initialized {d} blocks", .{blocks});
+    init();
 
     serial.write("hello from pepin\r\n");
     hcf();

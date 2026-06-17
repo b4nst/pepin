@@ -77,7 +77,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     // Create our limine wrapper module
-    const limine_module = b.createModule(.{ .root_source_file = b.path("src/limine.zig"), .target = target });
+    const limine_module = b.createModule(.{ .root_source_file = b.path("lib/limine/root.zig"), .target = target });
 
     // Create a module for the kernel.
     const kernel_module = b.createModule(.{

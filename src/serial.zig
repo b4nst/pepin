@@ -3,11 +3,15 @@ const std = @import("std");
 const builtin = @import("builtin");
 
 const serial = switch (builtin.cpu.arch) {
-    .aarch64 => @import("arch/aarch64/serial.zig"),
-    .riscv64 => @import("arch/riscv64/serial.zig"),
-    .x86_64 => @import("arch/x86_64/serial.zig"),
+    .aarch64 => @import("serial_aarch64.zig"),
+    .riscv64 => @import("serial_riscv64.zig"),
+    .x86_64 => @import("serial_x86_64.zig"),
     else => @compileError("serial: unsupported architecture"),
 };
+
+pub fn init() void {
+    serial.init();
+}
 
 const vtable: std.Io.Writer.VTable = .{ .drain = drain };
 
