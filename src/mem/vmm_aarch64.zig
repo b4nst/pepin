@@ -59,6 +59,8 @@ pub fn map(hhdm_offset: usize, virt: usize, phys: usize, flags: paging.Flags) vo
         const e: Pte = @bitCast(table[iN]);
         if (e.valid and e.type) {
             table_phys = @as(usize, e.addr) << 12;
+        } else if (e.valid and !e.type) {
+            @panic("huge page on descent");
         } else {
             // alloc the table
             const new = pmm.allocZeroed() orelse @panic("todo return error");

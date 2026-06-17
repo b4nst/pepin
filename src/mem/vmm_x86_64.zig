@@ -53,6 +53,8 @@ pub fn map(hhdm_offset: usize, virt: usize, phys: usize, flags: paging.Flags) vo
             const new = pmm.allocZeroed() orelse @panic("todo return error");
             table[iN] = encode(new, intermediate);
             table_phys = new;
+        } else if (e & (1 << 7)) {
+            @panic("huge page on descent");
         } else table_phys = e & ADDR_MASK;
     }
 

@@ -34,7 +34,9 @@ fn encode(phys: usize, f: paging.Flags) u64 {
 pub fn map(hhdm_offset: usize, virt: usize, phys: usize, flags: paging.Flags) void {
     const satp = read_satp();
     var table_phys = (satp & 0xFFF_FFFF_FFFF) << 12; // PPN (44 bits) << 12
-    const levels = ((satp >> 60) & 0xF) - 5;
+    const mode = (satp >> 60) & 0xF;
+    if (mode != 8 and mode != 9) @panic("unexpected satp mode");
+    const levels = mode - 5;
 
     // descend the upper levels: L from levels-1 down to 1
     var l: usize = levels - 1;

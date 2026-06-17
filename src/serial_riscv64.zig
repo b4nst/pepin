@@ -1,4 +1,4 @@
-const mem = @import("mem/main.zig");
+const mem = @import("mem/root.zig");
 
 const UART_VA = 0xffff_9000_0000_0000;
 const UART_PA = 0x10000000;

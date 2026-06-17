@@ -2,7 +2,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 const limine = @import("limine");
 
-const mem = @import("mem/main.zig");
+const mem = @import("mem/root.zig");
 const serial = @import("serial.zig");
 
 pub const panic = std.debug.FullPanic(caravanPalace);
