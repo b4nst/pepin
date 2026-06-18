@@ -1,6 +1,8 @@
 const builtin = @import("builtin");
 const serial = @import("serial.zig");
 const trap = switch (builtin.cpu.arch) {
+    .aarch64 => @import("trap_aarch64.zig"),
+    .riscv64 => @import("trap_riscv64.zig"),
     .x86_64 => @import("trap_x86_64.zig"),
     else => @compileError("trap: unsupported architecture"),
 };
