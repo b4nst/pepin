@@ -9,8 +9,11 @@ const serial = switch (builtin.cpu.arch) {
     else => @compileError("serial: unsupported architecture"),
 };
 
+var ready: bool = false;
+
 pub fn init() void {
     serial.init();
+    ready = true;
 }
 
 const vtable: std.Io.Writer.VTable = .{ .drain = drain };
@@ -19,6 +22,7 @@ const vtable: std.Io.Writer.VTable = .{ .drain = drain };
 /// silently returns on error.
 /// inted for use in "printf debugging"
 pub fn print(comptime fmt: []const u8, args: anytype) void {
+    if (!ready) return;
     var buf: [256]u8 = undefined;
     var w: std.Io.Writer = .{ .vtable = &vtable, .buffer = &buf, .end = 0 };
     w.print(fmt, args) catch return;
@@ -38,6 +42,7 @@ pub fn write(s: []const u8) void {
 
 /// Put a char on the serial link
 pub fn putchar(c: u8) void {
+    if (!ready) return;
     serial.putchar(c);
 }
 
